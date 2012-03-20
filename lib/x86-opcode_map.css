@@ -1,0 +1,35 @@
+
+table {
+	border-collapse: separate;
+}
+
+td {
+	border: 1px solid #aaa;
+	font-family: monospace;
+	font-size: 12px;
+	background: #f6f6f6;
+	padding: 1px;
+}
+
+td:nth-child(2n+1) {
+	background: #dedede;
+}
+
+td:hover {
+	background: #fff;
+	border: 1px dotted black;
+}
+
+th {
+	font-family: monospace;
+	font-size: 13px;
+}
+
+h3 {
+	margin-top: 35px;
+	border-left: 14px solid #bbb;
+	padding: 3px 3px 3px 5px;
+	background: #f2f2f2;
+}
+
+
