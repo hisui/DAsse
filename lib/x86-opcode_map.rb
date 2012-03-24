@@ -1,5 +1,5 @@
 # coding: utf-8
-# This script is a part of DAsse(https://github.com/hisui/dasse)
+# This script is a part of DAsse(https://github.com/hisui/DAsse)
 
 require "../ext/rjquery"
 
@@ -43,7 +43,7 @@ ONE_BYTE_OPCODE_MAP = <<ONE_BYTE_OPCODE_MAP
   |---------+---------+---------+---------+---------+---------+--------+--------+---------+---------+---------+---------+---------+---------+--------+---------|
   |   eAX   |   eCX   |   eDX   |   eBX   |   eSP   |   eBP   |  eSI   |  eDI   |   eAX   |   eCX   |   eDX   |   eBX   |   eSP   |   eBP   |  eSI   |   eDI   |
 6 +---------+---------+---------+---------+---------+---------+--------+--------+---------+---------+---------+---------+---------+---------+--------+---------+
-  |         |         |  BOUND  |  ARPL   |  (SEG   |  (SEG   |(Operand|(Address|  PUSH   |  IMUL   |  PUSH   |  IMUL   |  INSB   | INSW/D  | OUTSB  | OUTSW/D |
+  |         |         |  BOUND  |  ARPL   |  (SEG   |  (SEG   |(Operand|(Address|  PUSH   |  IMUL   |  PUSH   |  IMUL   |  INSB   |INS(W/D) | OUTSB  |OUTS(W/D)|
   |  PUSHA  |  POPA   |         |         |         |         |        |        |         |         |         |         |         |         |        |         |
   |         |         |  Gv,Ma  |  Ew,Rw  |   =FS)  |   =GS)  |  Size) |  Size) |   Iv    |Gv,Ev,Iv |   Ib    |Gv,Ev,Ib |  Yb,DX  |  Yb,DX  | DX,Xb  |  DX,Xv  |
 7 +---------+---------+---------+---------+---------+---------+--------+--------+---------+---------+---------+---------+---------+---------+--------+---------+
@@ -59,9 +59,9 @@ ONE_BYTE_OPCODE_MAP = <<ONE_BYTE_OPCODE_MAP
   |   NOP   +---------+---------+---------+---------+---------+--------+--------+   CBW   |   CWD   |         |  WAIT   |         |         |  SAHF  |  LAHF   |
   |         | eCX,eAX | eDX,eAX | eBX,eAX | eSP,eAX | eBP,eAX |eSI,eAX |eDI,eAX |         |         |   Ap    |         |   Fv    |   Fv    |        |         |
 A +---------+---------+---------+---------+---------+---------+--------+--------+---------+---------+---------+---------+---------+---------+--------+---------+
-  |                  MOV                  |  MOVSB  | MOVSW/D | CMPSB  |CMPSW/D |       TEST        |  STOSB  | STOSW/D |  LODSB  | LODSW/D | SCASB  | SCASW/D |
-  |---------+---------+---------+---------+         |         |        |        +---------+---------+         |         |         |         |        |         |
-  |  AL,Ob  |  eAX,Ov |  Ob,AL  |  Ov,eAX |  Xb,Yb  |  Xv,Yv  |  Xb,Yb |  Xv,Yv |  AL,Ib  | eAX,Iv  |  Yb,AL  |  Yv,eAX |  AL,Xb  | eAX,Xv  |  AL,Xb | eAX,Xv  |
+  |                  MOV                  |  MOVSB  |MOVS(W/D)| CMPSB  |  CMPS  |       TEST        |  STOSB  |STOS(W/D)|  LODSB  |LODS(W/D)| SCASB  |SCAS(W/D)|
+  |---------+---------+---------+---------+         |         |        | (W/D)  +---------+---------+         |         |         |         |        |         |
+  |  AL,Ob  | eAX,Ov  |  Ob,AL  | Ov,eAX  |  Xb,Yb  |  Xv,Yv  | Xb,Yb  | Xv,Yv  |  AL,Ib  | eAX,Iv  |  Yb,AL  | Yv,eAX  |  AL,Xb  | eAX,Xv  | AL,Xb  | eAX,Xv  |
 B +---------+---------+---------+---------+---------+---------+--------+--------+---------+---------+---------+---------+---------+---------+--------+---------+
   |                       MOV(immediate byte into byte register)                |        MOV(immediate word or double into word or double register)            |
   |---------+---------+---------+---------+---------+---------+--------+--------+---------+---------+---------+---------+---------+---------+--------+---------|
@@ -75,7 +75,7 @@ D +---------+---------+---------+---------+---------+---------+--------+--------
   |---------+---------+---------+---------+   AAM   |   AAD   |        |  XLAT  |                    (Escape to coprocessor instruction set)                   |
   |  Grp#4  |  Grp#5  |  Grp#6  |  Grp#7  |         |         |        |        |                                                                              |
 E +---------+---------+---------+---------+---------+---------+--------+--------+---------+-----------------------------+-------------------+------------------+
-  | LOOPNE  |  LOOPE  |   LOOP  |  JCXZ   |        IN         |       OUT       |   CALL  |             JNP             |        IN         |       OUT        |
+  | LOOPNE  |  LOOPE  |   LOOP  |  JCXZ   |        IN         |       OUT       |   CALL  |             JMP             |        IN         |       OUT        |
   |         |         |         |         +---------+---------+--------+--------+         +---------+---------+---------+---------+---------+--------+---------|
   |   Jb    |   Jb    |    Jb   |   Jb    |  AL,Ib  | eAX,Ib  |  Ib,AL | Ib,eAX |    Av   |   Jv    |   Ap    |   Jb    |  AL,DX  | eAX,DX  | DX,AL  | DX,eAX  |
 F +---------+---------+---------+---------+---------+---------+--------+--------+---------+---------+---------+---------+---------+---------+--------+---------+
@@ -101,9 +101,9 @@ TWO_BYTE_OPCODE_MAP = <<TWO_BYTE_OPCODE_MAP
   |         |         |         |         |         |         |        |         |         |         |         |         |         |         |        |        |
   |         |         |         |         |         |         |        |         |         |         |         |         |         |         |        |        |
 2 +---------+---------+---------+---------+---------+---------+--------+---------+---------+---------+---------+---------+---------+---------+--------+--------+
-  |   MOV   |   MOV   |   MOV   |   MOV   |   MOV   |         |   MOV  |         |         |         |         |         |         |         |        |        |
+  |   MOV   |   MOV   |   MOV   |   MOV   |   MOV   |         |  MOV   |         |         |         |         |         |         |         |        |        |
   |         |         |         |         |         |         |        |         |         |         |         |         |         |         |        |        |
-  |  Cd,Rd  |  Dd,Rd  |  Rd,Cd  |  Rd,Dd  |  Td,Rd  |         |  Rd,Td |         |         |         |         |         |         |         |        |        |
+  |  Rd,Cd  |  Rd,Dd  |  Cd,Rd  |  Dd,Rd  |  Rd,Td  |         | Td,Rd  |         |         |         |         |         |         |         |        |        |
 3 +---------+---------+---------+---------+---------+---------+--------+---------+---------+---------+---------+---------+---------+---------+--------+--------+
   |         |         |         |         |         |         |        |         |         |         |         |         |         |         |        |        |
   |         |         |         |         |         |         |        |         |         |         |         |         |         |         |        |        |
@@ -192,10 +192,10 @@ GROUP_TABLE = <<GROUP_TABLE
   | Ev,CL | Ev,CL | Ev,CL | Ev,CL | Ev,CL | Ev,CL |       | Ev,CL |
 8 +-------+-------+-------+-------+-------+-------+-------+-------+
   | TEST  |       |  NOT  |  NEG  |  MUL  | IMUL  |  DIV  | IDIV  |
-  | Eb,Ib |       |  Eb   |  Eb   | Eb,AL | Eb,AL | Eb,AL | Eb,AL |
+  | Eb,Ib |       |  Eb   |  Eb   | AL,Eb | AL,Eb | AL,Eb | AL,Eb |
 9 +-------+-------+-------+-------+-------+-------+-------+-------+
   | TEST  |       |  NOT  |  NEG  |  MUL  | IMUL  |  DIV  | IDIV  |
-  | Ev,Iv |       |  Ev   |  Ev   | Ev,AL | Ev,AL | Ev,AL | Ev,AL |
+  | Ev,Iv |       |  Ev   |  Ev   |eAX,Ev |eAX,Ev |eAX,Ev |eAX,Ev |
 A +-------+-------+-------+-------+-------+-------+-------+-------+
   |  INC  |  DEC  |       |       |       |       |       |       |
   |  Eb   |  Eb   |       |       |       |       |       |       |
@@ -242,13 +242,12 @@ def parse_text_grid(source)
 		while i+1 < row[0].size
 			k = row[0].index "|", i
 			j = 0
-			data  =      row[0][i...k].strip
-			data += " "+ row[j][i...k].strip while (j+=1) < row.size && row[j][i] != "-"
-			data.strip!
+			data  =      row[0][i...k]
+			data += " "+ row[j][i...k] while (j+=1) < row.size && row[j][i] != "-"
 			if (j+=1) < row.size
 				a = i
 				while (b = row[j].index("|", a) || row[j].size) <= k
-					cols << data + row[j][a...b]
+					cols << data + " " + row[j][a...b]
 					a = b + 1
 				end
 			else
@@ -258,8 +257,14 @@ def parse_text_grid(source)
 		end
 		grid << cols
 	}
-	# コメントの削除
-	grid.each {|cols| cols.map! {|e| e.gsub(/\(.*?\)/, "") }}
+	# コメントや無駄な空白の削除
+	grid.each {|cols|
+		cols.each {|e|
+			e.gsub!    /\(.*?\)/, ""
+			e.gsub! /(?<=\s)\s+/, ""
+			e.strip!
+		}
+	}
 	grid
 end
 
@@ -294,24 +299,23 @@ doc = RjQuery <<HTML
 </html>
 HTML
 
+INSTR_REFERENCE_URI = "http://siyobik.info.gf/main/reference/instruction/%s"
+
 def build_table(table, opcode_map)
-	thead = RjNode.new "thead"
-	   tr = RjNode.new "tr"
-	thead << tr
-	   tr << RjNode.new("th")
-	opcode_map[0].size.times {|i|
-		th = RjNode.new "th"
-		tr << th
-		th << "%X" % i
-	}
 	tbody = RjNode.new "tbody"
+	thead = RjNode.new("thead", {}, RjNode.new("tr", {},
+		[RjNode.new("th")] + opcode_map[0].size.times.map {|i| RjQuery("<th>%X</th>" % i) }))
+	
 	opcode_map.each_with_index {|row, i|
-		tbody << ( tr = RjNode.new("tr") )
-		   tr << ( th = RjNode.new("th") )
-		   th << "%X" % i
-		   row.each_with_index {|e, j|
+		tbody << ( tr = RjQuery("<tr><th>%X</th></tr>" % i) )
+		row.each_with_index {|e, j|
 			tr << ( td = RjNode.new("td", {title: "%x%x" % [i, j]}) )
-			td << e
+			if e =~/^([A-Z]+)\b(\s*.*)/
+				td << RjNode.new(  "a", {href: INSTR_REFERENCE_URI % $1}, $1)
+				td << RjNode.new("div", {}, $2)
+			else
+				td << e
+			end
 		}
 	}
 	table << thead

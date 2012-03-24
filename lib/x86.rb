@@ -1,5 +1,5 @@
 # coding: utf-8
-# This script is a part of DAsse(https://github.com/hisui/dasse)
+# This script is a part of DAsse(https://github.com/hisui/DAsse)
 
 require "pp"
 require "rjquery"
@@ -35,46 +35,54 @@ class Reg < Operand
 		@@register_map[name.downcase.intern]
 	end
 
+	# この関数のレジスタとインデックスの対応、割りと当てずっぽうなので後で直す<(^_^;)
 	def self.get(i, kind="G", size=4)
 		case kind
+		# control registers
+		when "C"
+			case i
+			when 0 then CR0
+			when 1 then CR1
+			when 2 then CR2
+			when 3 then CR3
+			when 4 then CR4
+			end
+		# debug registers
+		when "D"
+			case i
+			when 0 then DR0
+			when 1 then DR1
+			when 2 then DR2
+			when 3 then DR3
+			when 5 then DR6
+			when 6 then DR7
+			end
+		# general registers
 		when "G"
 			case size
 			when 4 then
 				case i
-				when 0 then EAX
-				when 1 then ECX
-				when 2 then EDX
-				when 3 then EBX
-				when 4 then ESP
-				when 5 then EBP
-				when 6 then ESI
-				when 7 then EDI
+				when 0 then EAX; when 1 then ECX
+				when 2 then EDX; when 3 then EBX
+				when 4 then ESP; when 5 then EBP
+				when 6 then ESI; when 7 then EDI
 				end
 			when 2
 				case i
-				when 0 then AX
-				when 1 then CX
-				when 2 then DX
-				when 3 then BX
-				when 4 then SP
-				when 5 then BP
-				when 6 then SI
-				when 7 then DI
+				when 0 then AX; when 1 then CX
+				when 2 then DX; when 3 then BX
+				when 4 then SP; when 5 then BP
+				when 6 then SI; when 7 then DI
 				end
 			when 1
 				case i
-				when 0 then AL
-				when 1 then CL
-				when 2 then DL
-				when 3 then BL
-				when 4 then AH
-				when 5 then CH
-				when 6 then DH
-				when 7 then BH
+				when 0 then AL; when 1 then CL
+				when 2 then DL; when 3 then BL
+				when 4 then AH; when 5 then CH
+				when 6 then DH; when 7 then BH
 				end
 			end
-		when "C"
-			raise
+		# segment registers
 		when "S"
 			case i
 			when 0 then CS
@@ -83,6 +91,12 @@ class Reg < Operand
 			when 3 then FS
 			when 4 then GS
 			when 5 then SS
+			end
+		# test registers
+		when "T"
+			case i
+			when 0 then TR0
+			when 1 then TR1
 			end
 		end
 	end
@@ -118,16 +132,43 @@ class Reg < Operand
 	EDI = Reg.new :edi, 32, DI
 	
 	# segment registers
-	CS = Reg.new :cs, 32
-	DS = Reg.new :ds, 32
-	ES = Reg.new :es, 32
-	FS = Reg.new :fs, 32
-	GS = Reg.new :gs, 32
-	SS = Reg.new :ss, 32
+	CS = Reg.new :cs, 16
+	DS = Reg.new :ds, 16
+	ES = Reg.new :es, 16
+	FS = Reg.new :fs, 16
+	GS = Reg.new :gs, 16
+	SS = Reg.new :ss, 16
 	
 	# FLAGS registers
 	 FLAGS = Reg.new  :flags, 16
 	EFLAGS = Reg.new :eflags, 32, FLAGS
+	
+	# instruction pointer(Program counter)
+	 IP = Reg.new  :ip, 16
+	EIP = Reg.new :eip, 32
+	
+	# global/interrupt discriptor table register
+	GDTR = Reg.new :gdtr, 48
+	IDTR = Reg.new :idtr, 48
+	
+	# control registers
+	CR0 = Reg.new :cr0, 32
+	CR1 = Reg.new :cr1, 32 # reserved
+	CR2 = Reg.new :cr2, 32
+	CR3 = Reg.new :cr3, 32
+	CR4 = Reg.new :cr4, 32
+	
+	# debug registers
+	DR0 = Reg.new :dr0, 32
+	DR1 = Reg.new :dr1, 32
+	DR2 = Reg.new :dr2, 32
+	DR3 = Reg.new :dr3, 32
+	DR6 = Reg.new :dr6, 32
+	DR7 = Reg.new :dr7, 32
+	
+	# test registers
+	TR0 = Reg.new :tr0, 32
+	TR1 = Reg.new :tr1, 32
 	
 	# XMM registers
 	XMM0 = Reg.new :xmm0, 128
@@ -223,9 +264,9 @@ class Opcode
 		if arg =~/^([A-Z])([a-z])$/
 			mode =      $1
 			size = case $2
-			when "a" then  0 # ?
+			when "a" then  0 # BOUNDだけで使われてる(http://siyobik.info.gf/main/reference/instruction/BOUND)
 			when "p" then  0 # ?
-			when "s" then  0 # ?
+			when "s" then  0 # six-byte psuedo descriptor(多分アドレスでいい・・・のかな)
 			when "c" then -1 # byte or word
 			when "v" then -2 # word or double word
 			when "d" then  4 # double word
@@ -289,7 +330,7 @@ class DASM_x86
 	# 16-bitモードが有効かどうか
 	# see 17.1.1 Default Segment Attribute
 	#
-	attr_accessor :off, :is_16bit_mode
+	attr_accessor :pos, :is_16bit_mode
 	
 	# prefixとバイトデータの対応表
 	PREFIX_MAP = 
@@ -307,13 +348,13 @@ class DASM_x86
 		:imm,
 		:rm_value)
 
-	def initialize(src, off=0)
+	def initialize(src, pos=0)
 		@src = src
-		@off = off
+		@pos = pos
 	end
 	
 	def more?
-		@off < @src.size
+		@pos < @src.size
 	end
 
 	#
@@ -337,7 +378,6 @@ class DASM_x86
 	end
 	
 	def walk
-
 		# 各種prefixのちぇっく。一旦、内容をリセットする
 		PREFIX_MAP.each {|key, _| instance_variable_set key, nil }
 		loop {
@@ -404,17 +444,17 @@ class DASM_x86
 	end
 	
 	def inc_and_get
-		@src.getbyte(@off += 1)
+		@src.getbyte(@pos += 1)
 	end
 	
 	def get_and_inc
-		@src.getbyte @off
+		@src.getbyte @pos
 	ensure
-		@off += 1
+		@pos += 1
 	end
 	
 	def get
-		@src.getbyte @off
+		@src.getbyte @pos
 	end
 	
 	def get_n(n, signed=true)
@@ -454,7 +494,7 @@ def build_opcode_map(map, rows, modif)
 			map[modif|hi|lo+=1] = case td.inner_text
 			when /Grp#([\dA-F]+)/ then
 				$1.hex
-			when /([\w\/]+)((?:\s+\w+(?:\s*,\s*\w+)*)?)/ then
+			when /([A-Z]+)((?:\s+\w+(?:\s*,\s*\w+)*)?)/ then
 				Opcode.new $1, $2.split(/,/).map(&:strip)
 			end
 		}

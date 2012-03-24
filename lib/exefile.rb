@@ -1,5 +1,5 @@
 # coding: utf-8
-# This script is a part of DAsse(https://github.com/hisui/dasse)
+# This script is a part of DAsse(https://github.com/hisui/DAsse)
 
 require "poddsl"
 require "pp"

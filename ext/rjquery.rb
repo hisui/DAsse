@@ -20,7 +20,7 @@ class RjStAX
 	def next_node       # 1                     2    3      4
 		if @scan.scan %r{^((?:.*?(?:<!.*?>)?)*?)(<\s*(/)?\s*((?:\w+:)?\w+))}m
 			unless @scan[1].empty?
-				@text = @scan[1]
+				@text = RjStAX.decode @scan[1].strip
 				@node = :text
 				@scan.pos -= @scan[2].size
 				return true
@@ -30,7 +30,7 @@ class RjStAX
 				if @scan[3].nil?
 					@attrs = {}        #    1                    2      3
 					while @scan.scan %r{^\s*([^\s/=>]+)(?:\s*=\s*(['"]?)((?=['"])(?=\2)|(?!\2).*?|[^\s>]*)\2)?}m
-						@attrs[@scan[1]] = @scan[3] || @scan[1]
+						@attrs[@scan[1]] = trim(@scan[3] || @scan[1])
 					end
 					if @scan.scan %r{^\s*(/)?\s*>}m
 						@node = @scan[1] ? :empty : :open
@@ -43,12 +43,44 @@ class RjStAX
 			end
 		end
 		unless scan.eos?
-			@text = scan.rest
+			@text = trim scan.rest
 			@node = :text
-			scan.pos += @text.size
+			scan.clear
 			return true
 		end
 		nil
+	end
+	
+	def trim(text)
+		RjStAX.decode(text.gsub(/\s+/, " "))
+	end
+	
+	def self.encode(text)
+		html = text.dup
+		html.gsub! "&", "&amp;"
+		html.gsub! "<", "&lt;"
+		html.gsub! ">", "&gt;"
+		html.gsub! "'", "&apos;"
+		html.gsub! '"', "&quot;"
+		html.gsub! " ", "&nbsp;"
+		html
+	end
+	
+	def self.decode(html)
+		html.gsub(/&(?:(#\d+)|(.*?));/) {||
+			return $1.to_i.chr if $1
+			case $2
+			when  "amp" then "&"
+			when   "lt" then "<"
+			when   "gt" then ">"
+			when "apos" then "'"
+			when "quot" then '"'
+			when "nbsp" then " "
+			else
+				# raise RuntimeError.new("Unknown character entity: `#{$2}'.")
+				"?" # エラーになるとウザいので・・・<(^_^;)
+			end
+		}
 	end
 end
 
@@ -171,16 +203,17 @@ end
 
 # HTMLの要素(タグ)を表現
 class RjNode < RjNodeSet
-	@@tab     = "\t"
-	@@newline = "\n"
+	@@newline = ""
+	@@tab     = ""
 	attr_accessor :name, :attrs, :all, :parent
 
-	def initialize(name, attrs={})
+	def initialize(name, attrs={}, child=nil)
 		def (@attrs = attrs.dup).to_s
-			map {|key, val| "#{key}=\"#{val}\"" }.join " "
+			map {|key, val| " #{key}=\"#{RjStAX.encode(val)}\"" }.join ""
 		end
 		@name = name
 		@all  = [] # TODO: linked list
+		self << child if child
 	end
 	
 	def method_missing(key, *args)
@@ -217,10 +250,17 @@ class RjNode < RjNodeSet
 	end
 	
 	def <<(child)
-		child = RjTextNode.new child if child.is_a? String
-		child.parent.remove child if child.parent
-		child.parent = self
-		@all << child
+		case child
+		when RjTextNode,
+		     RjNode then
+			child.parent.remove child if child.parent
+			child.parent = nil
+			@all << child
+		when String then
+			@all << RjTextNode.new(child)
+		when Enumerable then
+			child.each {|e| self << e }
+		end
 		make_cache_dirty
 		self
 	end
@@ -235,7 +275,7 @@ class RjNode < RjNodeSet
 	end
 	
 	def to_s
-		html = "<#{name} #{attrs}>" + @@newline
+		html = "<#{name}#{attrs}>" + @@newline
 		lifo = [[0, self]]
 		until lifo.empty?
 			i, node = lifo.last
@@ -250,10 +290,10 @@ class RjNode < RjNodeSet
 			html += @@tab * lifo.size
 			if node.all.empty?
 				html += node.instance_of?(RjTextNode) ?
-						node.text: "<#{node.name} #{node.attrs}></#{node.name}>" + @@newline
+						node.to_s: "<#{node.name}#{node.attrs}></#{node.name}>" + @@newline
 				next
 			end
-			html += "<#{node.name} #{node.attrs}>"
+			html += "<#{node.name}#{node.attrs}>"
 			html += @@newline
 			lifo << [0, node]
 		end
@@ -272,7 +312,7 @@ end
 
 
 class RjTextNode
-	attr_accessor :text, :parent
+	attr_accessor :parent
 
 	def initialize(text)
 		@text = text
@@ -287,7 +327,7 @@ class RjTextNode
 	end
 	
 	def to_s
-		@text
+		@html ||= RjStAX.encode(@text)
 	end
 	
 	def inspect
@@ -304,9 +344,8 @@ def RjQuery(html)
 	while parser.next_node
 		case parser.node
 		when :text then
-			if lifo.last and (text = parser.text.strip) != ""
-				lifo.last << RjTextNode.new(text)
-			end
+			lifo.last and (text = parser.text) != "" and
+			lifo.last << RjTextNode.new(text)
 		when :open, :empty then
 			node = RjNode.new parser.name, parser.attrs || {}
 			(lifo.last || root) << node
@@ -315,7 +354,6 @@ def RjQuery(html)
 			lifo.slice!(lifo.rindex {|node| parser.name == node.name }..-1) rescue nil
 		end
 	end
-	#puts root[0]
 	RjNodeSet.from_a root
 end
 

@@ -1,5 +1,5 @@
 # coding: utf-8
-# This script is a part of DAsse(https://github.com/hisui/dasse)
+# This script is a part of DAsse(https://github.com/hisui/DAsse)
 
 POD_MEMBER_TYPES = {}
 
@@ -44,37 +44,34 @@ def make_encoder(&encode)
 	}
 end
 
-# defines big-endian numeric types: uiXX, siXX (XX=8*2^n, n=0..3)
-1.times {
+# defines little-endian numeric types: uiXX, siXX (XX=8*2^n, n=0..3)
+4.times {|pow|
+	size = 2 ** pow
+	uiXX = pod_member("ui#{8 * size}".intern, size)
+	uiXX.singleton_class.instance_eval {
+		
+		define_method(:decode, &make_decoder {|io, _|
+			io.read(size).reverse. # reads as little-endin
+			each_byte.reduce {|acc, e| acc << 8 | e }
+		})
+		
+		define_method(:encode, &make_encoder {|io, _, value|
+			size.times {|n| io.putc (value >> 8 * n) & 0xff }
+		})
+	}
+	siXX = pod_member("si#{8 * size}".intern, size)
+	siXX.singleton_class.instance_eval {
+		mask = (1 << 8 * size) - 1
 
-	4.times {|pow|
-		size = 2 ** pow
-		uiXX = pod_member("ui#{8 * size}".intern, size)
-		uiXX.singleton_class.instance_eval {
-			
-			define_method(:decode, &make_decoder {|io, _|
-				io.read(size).reverse. # reads as little-endin
-				each_byte.reduce {|acc, e| acc << 8 | e }
-			})
-			
-			define_method(:encode, &make_encoder {|io, _, value|
-				size.times {|n| io.putc (value >> 8 * n) & 0xff }
-			})
-		}
-		siXX = pod_member("si#{8 * size}".intern, size)
-		siXX.singleton_class.instance_eval {
-			mask = (1 << 8 * size) - 1
-
-			define_method(:decode, &make_decoder {|io, _|
-				t = uiXX.decode io, nil
-				t = -((~t & mask) + 1) if (t >> 8 * size - 1) != 0 # 2's complement
-				t
-			})
-			
-			define_method(:encode, &make_encoder {|io, _, value|
-				uiXX.encode io, nil, value & mask
-			})
-		}
+		define_method(:decode, &make_decoder {|io, _|
+			t = uiXX.decode io, nil
+			t = -((~t & mask) + 1) if (t >> 8 * size - 1) != 0 # 2's complement
+			t
+		})
+		
+		define_method(:encode, &make_encoder {|io, _, value|
+			uiXX.encode io, nil, value & mask
+		})
 	}
 }
 

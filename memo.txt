@@ -21,5 +21,7 @@ i386のリファレンスマニュアル(http://www.logix.cz/michal/doc/i386/)�
 		+ CALL(Grp5)のオペランド、eP→Ep
 		+ PUSH(68)のオペランド、Ib→Iv
 		+ SHx(C1)のオペランドはIvではなくすべてIb？
+		+ e9~ebはJNPではなくJMP
+		+ 2つのオペランドの位置が逆(MOV 0f20~0f26)
 
 
